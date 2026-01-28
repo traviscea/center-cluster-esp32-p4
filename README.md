@@ -4,6 +4,7 @@
     * Search for the official ESP-IDF ide extension
 3. Open this repo folder in VS code
 4. Plug in Esp32-P4/screen via usb c
-5. Set target device to esp32s3(see "Description of Bottom Toolbar of VSCode User Interface" in the waveshare link above)
+5. Set target device to esp32p4(see "Description of Bottom Toolbar of VSCode User Interface" in the waveshare link above)
 6. Build 
+
 7. Flash
