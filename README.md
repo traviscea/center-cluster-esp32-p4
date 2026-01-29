@@ -1,3 +1,6 @@
+Esp32 Round Display for a digital gauge cluster
+https://youtu.be/t7H6pevep40
+
 1. Install [visual studio code](https://code.visualstudio.com/Download)
 2. Install the ESP-IDF extension(shown here: https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C#Introduction_to_ESP-IDF_and_Environment_Setup_.28VSCode_Column.29)
     * Open VSCode Package Manager
@@ -8,3 +11,4 @@
 6. Build 
 
 7. Flash
+
