@@ -1,0 +1,494 @@
+{
+  "name": "motec_c1212",
+  "bitrate": 500000,
+  "frames": [
+    {
+      "id": "0x9D220001",
+      "signals": [
+        {"name":"G_Force_Lat","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"G_Force_Long","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"G_Force_Vert","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drive_Speed","offset":6,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220002",
+      "signals": [
+        {"name":"Ground_Speed","offset":0,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CruiseSpeed","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordBlinkRight","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordDriveMode","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220003",
+      "signals": [
+        {"name":"Display_Mode_Change","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Display_Next_Line","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseDecel","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseCancel","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220004",
+      "signals": [
+        {"name":"Comms_RS232_Diag","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_Sats_Used","offset":2,"len":4,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220005",
+      "signals": [
+        {"name":"GPS_Altitude","offset":0,"len":4,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_Latitude","offset":4,"len":4,"scale":1e-07,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220006",
+      "signals": [
+        {"name":"GPS_Longitude","offset":0,"len":4,"scale":1e-07,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_Heading","offset":4,"len":4,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220007",
+      "signals": [
+        {"name":"GPS_Time","offset":0,"len":4,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_Date","offset":4,"len":4,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220008",
+      "signals": [
+        {"name":"GPS_Speed","offset":0,"len":4,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_Quality","offset":4,"len":4,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220009",
+      "signals": [
+        {"name":"CruiseEnable","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordBlinkLeft","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Bat_Volts_Dash","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CruiseActive","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000A",
+      "signals": [
+        {"name":"BoostAim","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordABSEvent1","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordABSEvent2","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"BoostPressure","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000B",
+      "signals": [
+        {"name":"TransmissionTemp","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"DifferentialTemp","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CoolantTemp","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"AmbientTemp","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000C",
+      "signals": [
+        {"name":"InletAirTemp","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"OilPressure","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"DifferentialFuelPressure","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CoolantPressure","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000D",
+      "signals": [
+        {"name":"FuelPressure","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ThrottlePedal","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ThrottlePosition","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ManifoldPressure","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000E",
+      "signals": [
+        {"name":"EngineSpeed","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22000F",
+      "signals": [
+        {"name":"Gear","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GPS_HDOP","offset":2,"len":4,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220010",
+      "signals": [
+        {"name":"GPS_DOP","offset":0,"len":4,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__LH_Indicator","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__RH_Indicator","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220011",
+      "signals": [
+        {"name":"GPS_VDOP","offset":0,"len":4,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Counter_1","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220012",
+      "signals": [
+        {"name":"GPS_Valid","offset":0,"len":4,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220013",
+      "signals": [
+        {"name":"Switch7","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220014",
+      "signals": [
+        {"name":"FordEbrakeSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordClusterBrightness","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordAdvanceTrac","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordACFanSpeed","offset":6,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220015",
+      "signals": [
+        {"name":"FordSteeringSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordNavSwitch","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordModeSwitch","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordDamperSwitch","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220016",
+      "signals": [
+        {"name":"FordDamperMode","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseSet","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseRes","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseOn","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220017",
+      "signals": [
+        {"name":"FordCruiseOff","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordCruiseAccel","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordAudioDials","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordHazards","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220018",
+      "signals": [
+        {"name":"FordShockPosRR","offset":0,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordShockPosRL","offset":2,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordShockPosFR","offset":4,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordShockPosFL","offset":6,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220019",
+      "signals": [
+        {"name":"FordABSState","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_TractionSw","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_TPedalTrans","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_TCPosSwitch","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001A",
+      "signals": [
+        {"name":"Drv_TBrakeSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_TBrakeBumpTimeSw","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_TBrakeBumpSw","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_RollingLaunchSw","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001B",
+      "signals": [
+        {"name":"Drv_RevMatchSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_PitSwitch","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_PitSpeedSwitch","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_ParachuteSw","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001C",
+      "signals": [
+        {"name":"Drv_NitrousSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_LaunchSwitch","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_LaunchMode","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_IdleMode","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001D",
+      "signals": [
+        {"name":"Drv_GhostCam","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_GearShift","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_FlatFootSw","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_EngOverrunMode","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001E",
+      "signals": [
+        {"name":"Drv_BoostLmtDisable","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Drv_BoostAim","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Switch8","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"_5V_Aux_Supply","offset":6,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22001F",
+      "signals": [
+        {"name":"Switch6","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Switch5","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Switch4","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Switch3","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220020",
+      "signals": [
+        {"name":"Switch2","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Switch1","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw8","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw7","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220021",
+      "signals": [
+        {"name":"RotarySw6","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw5","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw4","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw3","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220022",
+      "signals": [
+        {"name":"RotarySw2","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RotarySw1","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"RevMatchState","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"GhostCamState","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220023",
+      "signals": [
+        {"name":"NeutralSwitch","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ClutchState","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"BrakeState","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ClosedLoopTrimB2","offset":6,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220024",
+      "signals": [
+        {"name":"ClosedLoopTrimB1","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ExhuastLamdaB2","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ExhuastLamdaB1","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ExhuastLamda","offset":6,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220025",
+      "signals": [
+        {"name":"BCSDiag","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"LaunchDiag","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"BoostAimState","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"LaunchState","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220026",
+      "signals": [
+        {"name":"RollingLaunchState","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FuelPumpState","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"KnockWarning","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"IATWarning","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220027",
+      "signals": [
+        {"name":"FuelPressureWarning","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ExhaustTempWarning","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"ExhaustLambdaWarning","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CrankcasePresWarning","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220028",
+      "signals": [
+        {"name":"OilPressureWarning","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"OilTempWarning","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"EngineSpeedWarning","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CoolantPressWarning","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220029",
+      "signals": [
+        {"name":"CoolantTempWarning","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"WarningSource","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"EngineSpeedLimit","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"TCS_State","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002A",
+      "signals": [
+        {"name":"TCS_AimIdeal","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"CrankcasePressure","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"_8V_Aux_Supply","offset":4,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"BoostDutyCycle","offset":6,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002B",
+      "signals": [
+        {"name":"Fuel_Remaining","offset":0,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"AccelVert","offset":2,"len":4,"scale":0.001,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002C",
+      "signals": [
+        {"name":"AccelLong","offset":0,"len":4,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"AccelLat","offset":4,"len":2,"scale":0.001,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FuelTemp","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002D",
+      "signals": [
+        {"name":"ExhaustTemp","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Fuel_Level","offset":2,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Dash_Temp","offset":4,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordTirePressureRR","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002E",
+      "signals": [
+        {"name":"FordTirePressureRL","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordTirePressureFR","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordTirePressureFL","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FuelCutActive","offset":6,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D22002F",
+      "signals": [
+        {"name":"IgnCutActive","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordOdometer","offset":2,"len":4,"scale":100,"offset_val":0,"endian":"big","signed":true},
+        {"name":"SteeringAngle","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220030",
+      "signals": [
+        {"name":"ExhaustPressure","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordTrunk","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"BrakePressure","offset":4,"len":2,"scale":10,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordRightDoor","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220031",
+      "signals": [
+        {"name":"SecondaryContribution","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"SecondaryInjDutyCycle","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"EngineEfficiency","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"PrimaryInjDuty","offset":6,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220032",
+      "signals": [
+        {"name":"IgnitionTiming","offset":0,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FuelMixtureAim","offset":2,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordLineLock","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordLightsMain","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220033",
+      "signals": [
+        {"name":"FordLightsBright","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordLeftDoor","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FlexContent","offset":4,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordLaunchRPM","offset":6,"len":2,"scale":0.1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220034",
+      "signals": [
+        {"name":"FordLaunchEnable","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__Parker_Status","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__High_Beam_Status","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__Fog_Light_Status","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220035",
+      "signals": [
+        {"name":"Mustang__DRL_Status","offset":0,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__Door_Status","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"Mustang__Park_Brake_Status","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordHood","offset":6,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220036",
+      "signals": [
+        {"name":"FordFuelLevel","offset":0,"len":2,"scale":0.01,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordFogLights","offset":2,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true},
+        {"name":"FordExhaustValve","offset":4,"len":2,"scale":1,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220037",
+      "signals": [
+        {"name":"Odometer","offset":0,"len":4,"scale":100,"offset_val":0,"endian":"big","signed":true}
+      ]
+    },
+    {
+      "id": "0x9D220038",
+      "signals": [
+        {"name":"Alarm_Message","offset":0,"len":8,"scale":0,"offset_val":0,"endian":"big"}
+      ]
+    },
+    {
+      "id": "0x9D220039",
+      "signals": [
+        {"name":"Alarm_Value","offset":0,"len":8,"scale":0,"offset_val":0,"endian":"big"}
+      ]
+    },
+    {
+      "id": "0x9D22003A",
+      "signals": [
+        {"name":"Alarm_Active","offset":0,"len":1,"scale":0,"offset_val":0,"endian":"big"},
+        {"name":"Alarm_Flash","offset":1,"len":1,"scale":0,"offset_val":0,"endian":"big"}
+      ]
+    },
+    {
+      "id": "0x9D220000",
+      "signals": [
+        {"name":"CRC32","offset":0,"len":4,"scale":1,"offset_val":0,"endian":"big"}
+      ]
+    }
+  ]
+}
