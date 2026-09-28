@@ -1,6 +1,6 @@
 {
-  "name": "motec_c1212",
-  "bitrate": 500000,
+  "name": "motec",
+  "bitrate": 500000,//Your bitrate may vary.  Please update accordingly.
   "frames": [
     {
       "id": "0x9D220001",
