@@ -426,9 +426,4 @@ you need to update the minimum supported board revision with a few clicks.
 
 Follow the instructions here:
 
-https://discord.com/channels/1474501462905192450/1474502475280154927/1480043568469901459
-
-```
-
-I kept the instructions beginner-friendly since this is an **open-source DIY dash project**, and made the DBC section explicit enough that someone can clone the repo, drop in a DBC, run one command, and know exactly where the resulting JSON goes.
-```
+https://discord.com/channels/1474501462905192450/1474502475280154927/1480043568469901459
