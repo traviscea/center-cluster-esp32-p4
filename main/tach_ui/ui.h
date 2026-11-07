@@ -32,6 +32,11 @@ LV_IMG_DECLARE( ui_img_sti_logo_png);
 LV_FONT_DECLARE( ui_font_DotoLarge);
 LV_FONT_DECLARE( ui_font_Doto_48);
 LV_FONT_DECLARE( school_bell_48);
+LV_FONT_DECLARE( ui_font_dial_74);
+LV_FONT_DECLARE( ui_font_dial_30);
+LV_FONT_DECLARE( ui_font_speed_156);
+LV_FONT_DECLARE( ui_font_gear_136);
+LV_FONT_DECLARE( ui_font_odo_42);
 
 // UI INIT
 void ui_init(void);

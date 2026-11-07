@@ -281,6 +281,8 @@ static lv_color_t orange_color;
 static lv_color_t purple_color;
 static lv_color_t pink_color;
 static lv_color_t blue_color;
+static lv_color_t dial_color;
+static lv_color_t dial_dim_color;
 
 static inline int constrain_int(int x, int low, int high) {
     if (x < low) return low;
@@ -296,6 +298,8 @@ static void init_label_styles(void){
     purple_color = lv_palette_main(LV_PALETTE_PURPLE);
     pink_color = lv_palette_main(LV_PALETTE_PINK);
     blue_color = lv_palette_main(LV_PALETTE_CYAN);
+    dial_color = lv_color_hex(UI_COLOR_DIAL);
+    dial_dim_color = lv_color_hex(UI_COLOR_DIAL_DIM);
 }
 
 static void update_label_if_needed(lv_obj_t *label, char *new_value, lv_color_t new_color) { 
@@ -549,29 +553,8 @@ static int detect_gear(float rpm, float mph, float dt)
 }
 
 void tach_set_rpm(int rpm){
-    if(rpm < 0) rpm = 0;
-    if(rpm > 9000) rpm = 9000;
-
-    static lv_color_t current_color = {0};
-
-    lv_color_t new_color;
-
-    if (rpm >= 7000)
-        new_color = red_color;
-    else if (rpm >= 5000)
-        new_color = orange_color;
-    else
-        new_color = green_color;
-
-    // Only change color if needed
-    if (new_color.full != current_color.full) {
-        lv_obj_set_style_arc_color(ui_rpm_arc,
-                                   new_color,
-                                   LV_PART_INDICATOR);
-        current_color = new_color;
-    }
-
-    lv_arc_set_value(ui_rpm_arc, rpm);
+    // Needle position + shift glow are handled by the dial UI
+    ui_tach_set_rpm(rpm);
 }
 
 
@@ -585,7 +568,7 @@ void gauge_timer(lv_timer_t * t) {
     double miles = odometer_get_miles();
     char odo_buf[16];
     snprintf(odo_buf, sizeof(odo_buf), "%06.1f", miles);
-    update_label_if_needed(ui_label_odometer_value, odo_buf, green_color);
+    update_label_if_needed(ui_label_odometer_value, odo_buf, dial_dim_color);
 
 
     // -------- GEAR DETECTION -------- //
@@ -607,11 +590,11 @@ void gauge_timer(lv_timer_t * t) {
     if (gear != last_displayed) {
 
         if(gear == -1) {
-            update_label_if_needed(ui_label_gear_value, "N", purple_color);
+            update_label_if_needed(ui_label_gear_value, "N", dial_color);
         } else {
             char buf[2];
             snprintf(buf, sizeof(buf), "%d", gear);
-            update_label_if_needed(ui_label_gear_value, buf, purple_color);
+            update_label_if_needed(ui_label_gear_value, buf, dial_color);
         }
 
         last_displayed = gear;
@@ -638,7 +621,7 @@ void gauge_timer(lv_timer_t * t) {
         char fuel_comp_buf[12];
         snprintf(fuel_comp_buf, sizeof(fuel_comp_buf), "%4.1f", g_gauge_data.fuel_comp);
         //***Update afr and boost and fuel_comp labels here, 
-        // example -> update_label_if_needed(ui_label_odometer_value, odo_buf, green_color);
+        // example -> update_label_if_needed(ui_label_odometer_value, odo_buf, dial_dim_color);
         // update_label_if_needed();
         // update_label_if_needed();
     
@@ -1205,8 +1188,12 @@ void app_main(void) {
     tach_init();
     odometer_init();
 
+    // LVGL isn't thread-safe: hold the display lock while building the UI so
+    // the LVGL port task can't render at the same time.
+    bsp_display_lock(0);
     ui_init();
     lv_timer_create(gauge_timer, 10, NULL);
+    bsp_display_unlock();
 
     uart_init(UART_PORT, UART_TX_PIN, UART_PIN_NO_CHANGE, UART_TX_BUF_SIZE, UART_BAUD_RATE); 
     uart_init(UART1_PORT, UART1_TX_PIN, UART_PIN_NO_CHANGE, UART_TX_BUF_SIZE, UART_BAUD_RATE); 
@@ -1226,6 +1213,6 @@ void app_main(void) {
 
     bsp_display_backlight_off();
     vTaskDelay(pdMS_TO_TICKS(100)); 
-    bsp_display_brightness_set(50); 
+    bsp_display_brightness_set(70); 
 
 }

@@ -1,0 +1,27 @@
+# esp_lvgl_port 2.x pulls in optional add-ons (libpng, libjpeg-turbo, lz4)
+# only when these LVGL 9 options are enabled. This project uses LVGL 8.4,
+# whose Kconfig doesn't define them, and newer ESP-IDF component managers
+# fail the configure step ("Missing required kconfig option after retry")
+# when a dependency rule references a symbol that has no value anywhere.
+#
+# They need a prompt (i.e. be visible) so they actually get written to
+# sdkconfig as "not set"; a hidden option defaulting to n is never written
+# out, and the component manager still can't see it.
+#
+# Leave them all OFF. Remove this file if you move to LVGL 9.
+
+menu "LVGL 9 compatibility (leave all off)"
+
+config LV_USE_LIBPNG
+    bool "LV_USE_LIBPNG (LVGL 9 only, keep off)"
+    default n
+
+config LV_USE_LIBJPEG_TURBO
+    bool "LV_USE_LIBJPEG_TURBO (LVGL 9 only, keep off)"
+    default n
+
+config LV_USE_LZ4
+    bool "LV_USE_LZ4 (LVGL 9 only, keep off)"
+    default n
+
+endmenu
