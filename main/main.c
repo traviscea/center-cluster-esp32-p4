@@ -269,7 +269,7 @@ typedef struct __attribute__((packed)) {
     uint16_t afr;            // AFR x10
     int16_t boost;           // psi x10
     uint32_t lap_time_ms;    // current lap in milliseconds
-    int32_t  lap_delta_ms;   // predictive delta in ms
+    uint32_t best_lap_ms;    // best lap of the session in ms (0 = none yet)
 } gauge_payload_t;
 
 
@@ -1028,10 +1028,9 @@ static void adc_task(void *arg) {
             p->boost         = (int16_t)(g_gauge_data.boost_psi * 10.0f);
             
             uint64_t lap_us = lap_timer_get_current_us();
-            int32_t  delta_us = lap_timer_get_delta_us();
 
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
-            p->lap_delta_ms = (int32_t)(delta_us / 1000);
+            p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
@@ -1151,10 +1150,9 @@ static void can_mapping_task(void *arg){
             p->boost         = (int16_t)(g_gauge_data.boost_psi * 10.0f);
 
             uint64_t lap_us = lap_timer_get_current_us();
-            int32_t  delta_us = lap_timer_get_delta_us();
 
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
-            p->lap_delta_ms = (int32_t)(delta_us / 1000);
+            p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
