@@ -37,12 +37,16 @@ lv_obj_t *ui_label_odometer_value = NULL;
 static lv_meter_indicator_t *needle = NULL;
 static lv_meter_indicator_t *needle_glow = NULL;
 static lv_img_dsc_t *dial_snapshot = NULL;
+static lv_obj_t *dial_obj = NULL;         // the face: snapshot image or live widgets
 static int32_t last_rpm = -1000;
 
 // Shift light: 0 = off, 1 = yellow blink, 2 = red blink
 static int shift_light_state = 0;
 static bool shift_light_lit = false;
 static lv_timer_t *shift_blink_timer = NULL;
+
+static lv_obj_t *status_label = NULL;
+static lv_timer_t *status_timer = NULL;
 
 // Meter labels are the raw value (1000, 2000...). Show 1, 2, 3... instead.
 static void dial_label_cb(lv_event_t *e)
@@ -69,7 +73,7 @@ static void redline_stipple_cb(lv_event_t *e)
     lv_draw_rect_dsc_t dot;
     lv_draw_rect_dsc_init(&dot);
     dot.radius = LV_RADIUS_CIRCLE;
-    dot.bg_color = lv_color_hex(UI_COLOR_DIAL);
+    dot.bg_color = lv_color_hex(UI_COLOR_REDLINE);
     dot.bg_opa = LV_OPA_COVER;
 
     const float deg2rad = 3.14159265f / 180.0f;
@@ -211,6 +215,72 @@ static lv_obj_t *build_static_dial(lv_obj_t *parent)
     return root;
 }
 
+static void recolor_live_parts(void)
+{
+    // Gear and odometer are live labels; main.c also passes the current theme
+    // colors on every update, so they stay in sync.
+    if (ui_label_gear_value) lv_obj_set_style_text_color(ui_label_gear_value, lv_color_hex(UI_COLOR_DIAL), 0);
+    if (ui_label_odometer_value) lv_obj_set_style_text_color(ui_label_odometer_value, lv_color_hex(UI_COLOR_DIAL_DIM), 0);
+}
+
+// ---------------------------------------------------------------- color themes
+
+// Must be the same list, in the same order, on all three screens.
+const ui_theme_t ui_themes[UI_THEME_COUNT] = {
+    { "RED",    0xFF2A0A, 0xE6260A },
+    { "WHITE",  0xFFFFFF, 0xD6DEE6 },
+    { "GREEN",  0x00FF55, 0x00D648 },
+    { "BLUE",   0x00AAFF, 0x0090DD },
+    { "PURPLE", 0xD24DFF, 0xB43FDD },
+    { "AMBER",  0xFFB300, 0xE69E00 },
+};
+static uint8_t theme_index = 0;
+
+uint32_t ui_theme_dial(void) { return ui_themes[theme_index].dial; }
+uint32_t ui_theme_dim(void)  { return ui_themes[theme_index].dim; }
+uint8_t  ui_get_theme(void)  { return theme_index; }
+
+// Build the static face (ticks, numerals, labels) in the current theme and
+// flatten it into one image. Used at start-up and again on a theme change, when
+// the new face replaces the old one in place behind everything else.
+static void install_static_dial(void)
+{
+#if LV_USE_SNAPSHOT && UI_DIAL_USE_SNAPSHOT
+    // Free the old face first so only one full-screen image is in memory at once.
+    // (Nothing is drawn in between: this all runs under the LVGL lock.)
+    if (dial_snapshot) {
+        if (dial_obj) { lv_obj_del(dial_obj); dial_obj = NULL; }
+        lv_img_cache_invalidate_src(dial_snapshot);
+        lv_snapshot_free(dial_snapshot);
+        dial_snapshot = NULL;
+    }
+#endif
+    lv_obj_t *dial = build_static_dial(ui_Screen1);
+    lv_obj_update_layout(ui_Screen1);
+#if LV_USE_SNAPSHOT && UI_DIAL_USE_SNAPSHOT
+    dial_snapshot = lv_snapshot_take(dial, LV_IMG_CF_TRUE_COLOR);
+    if (dial_snapshot) {
+        lv_obj_del(dial);
+        dial = lv_img_create(ui_Screen1);
+        lv_img_set_src(dial, dial_snapshot);
+        lv_obj_center(dial);
+        lv_obj_clear_flag(dial, LV_OBJ_FLAG_CLICKABLE);
+    }
+#endif
+    if (dial_obj) lv_obj_del(dial_obj);       // old live face (snapshot off/failed)
+    dial_obj = dial;
+    lv_obj_move_background(dial_obj);
+}
+
+void ui_set_theme(uint8_t index)
+{
+    if (index >= UI_THEME_COUNT || index == theme_index) return;
+    theme_index = index;
+    if (!ui_Screen1) return;                  // not built yet: the first build uses it
+    install_static_dial();
+    recolor_live_parts();
+}
+
 void ui_Screen1_screen_init(void)
 {
     ui_Screen1 = lv_obj_create(NULL);
@@ -219,18 +289,8 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_bg_opa(ui_Screen1, LV_OPA_COVER, 0);
 
     // ---- Static dial -> one image ----
-    lv_obj_t *dial = build_static_dial(ui_Screen1);
-    lv_obj_update_layout(ui_Screen1);
-#if LV_USE_SNAPSHOT && UI_DIAL_USE_SNAPSHOT
-    dial_snapshot = lv_snapshot_take(dial, LV_IMG_CF_TRUE_COLOR);
-    if (dial_snapshot) {
-        lv_obj_del(dial);
-        lv_obj_t *img = lv_img_create(ui_Screen1);
-        lv_img_set_src(img, dial_snapshot);
-        lv_obj_center(img);
-        lv_obj_clear_flag(img, LV_OBJ_FLAG_CLICKABLE);
-    }
-#endif
+    dial_obj = NULL;
+    install_static_dial();
 
     // ---- Shift light: stock STI position, just above the hub (under the needle) ----
     ui_shift_light = make_circle(ui_Screen1, UI_SCALE(38));
@@ -299,8 +359,36 @@ void ui_tach_set_rpm(int32_t rpm)
     shift_light_set_state(target);
 }
 
+static void status_hide_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (status_label) lv_obj_del(status_label);
+    status_label = NULL;
+    status_timer = NULL;          // one-shot timer deletes itself
+}
+
+void ui_tach_show_status(const char *text, uint32_t duration_ms)
+{
+    if (!ui_Screen1) return;
+    if (!status_label) {
+        status_label = lv_label_create(ui_Screen1);
+        lv_obj_set_style_text_font(status_label, &ui_font_status_26, 0);
+        lv_obj_set_style_text_color(status_label, lv_color_hex(UI_COLOR_SHIFT_WARN), 0);
+        lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    }
+    lv_label_set_text(status_label, text);
+    lv_obj_align(status_label, LV_ALIGN_CENTER, 0, UI_SCALE(362));   // just below the odometer
+
+    if (status_timer) lv_timer_del(status_timer);
+    status_timer = lv_timer_create(status_hide_cb, duration_ms, NULL);
+    lv_timer_set_repeat_count(status_timer, 1);
+}
+
 void ui_Screen1_screen_destroy(void)
 {
+    if (status_timer) lv_timer_del(status_timer);
+    status_timer = NULL;
+    status_label = NULL;
     if (shift_blink_timer) lv_timer_del(shift_blink_timer);
     shift_blink_timer = NULL;
     shift_light_state = 0;
@@ -309,6 +397,7 @@ void ui_Screen1_screen_destroy(void)
     if (dial_snapshot) lv_snapshot_free(dial_snapshot);
 #endif
     dial_snapshot = NULL;
+    dial_obj = NULL;
     needle = NULL;
     needle_glow = NULL;
 

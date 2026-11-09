@@ -21,6 +21,8 @@
 #include "driver/adc.h"
 #include "driver/pulse_cnt.h"
 #include "esp_timer.h"
+#include "esp_system.h"
+#include <stdio.h>
 #include "gps_wrapper.h"
 #include "odometer/odometer.h"
 #include "lap_timer.h"
@@ -66,6 +68,12 @@
 
 #define TACH_GPIO GPIO_NUM_5
 
+// Theme button - GPIO 32, wired to ground through a push button
+#define THEME_BUTTON_GPIO GPIO_NUM_32
+// 1 = show what the button pin reads under the odometer whenever it changes
+// (for checking the wiring without a computer). Set to 0 once it works.
+#define THEME_BUTTON_DEBUG 0
+
 // AFR - GPIO 49
 #define AFR_ADC_CHANNEL ADC2_CHANNEL_0 
 
@@ -78,7 +86,7 @@
 #define UART_PORT UART_NUM_1
 #define UART1_PORT UART_NUM_2
 #define GAUGE_PKT_SOF   0xA5
-#define GAUGE_PKT_LEN   26
+#define GAUGE_PKT_LEN   27   // SOF + seq + 23-byte payload + CRC16
 #define UART_TX_BUF_SIZE 256
 #define UART_BAUD_RATE 2000000
 
@@ -94,6 +102,7 @@
 
 static char gps_speed_str[8];
 static volatile float g_speed_mph = 0.0f;
+static volatile bool  g_gps_fix = false;   // set by gps_task, read by the UI
 static lv_obj_t *speed_label;
 //--------------------------//
 
@@ -129,10 +138,18 @@ const float sensorR[] = {
 //-------------BOOST-------------//
 #define BOOST_FILTER_ALPHA 0.18F
 #define BOOST_DIVIDER_SCALE (20.0f / (10.0f + 20.0f))
-//equals voltage that boost sensor reads 0psi
-#define BOOST_ZERO_OFFSET 1.0F
-//adds psi for gauge calibration as all gauges read a little off...
-#define BOOST_OFFSET 3.2F
+// Two-point calibration. Volts here are the sensor volts as computed below
+// (after undoing the divider), so any ADC reference error is absorbed too.
+//   BOOST_ZERO_VOLTS   : computed volts at 0 psi (engine off). Same zero as
+//                        the old 1.0 V / +3.2 psi offset, so idle is unchanged.
+//   BOOST_PSI_PER_VOLT : slope. The old 14.5 psi/V read ~14.5 at a real 22 psi,
+//                        so it was scaled by 22/14.5 to 22.0. That then read
+//                        24.5 at a real 22, so it's scaled by 22/24.5 to 19.75.
+// To fine-tune: if the gauge reads X at a known real boost Y, multiply
+// BOOST_PSI_PER_VOLT by Y/X. If it reads off at 0 psi with the engine off,
+// adjust BOOST_ZERO_VOLTS (turn on ENABLE_LOGS to see the sensor volts).
+#define BOOST_ZERO_VOLTS   0.779f
+#define BOOST_PSI_PER_VOLT 19.75f
 //--------------------------------//
 
 
@@ -151,7 +168,10 @@ const float oil_fuel_pressure_alpha = 0.18f;
 //-------------WIDEBAND AFR-------------//
 
 #define AFR_DIVIDER_GAIN ((68.0f + 33.0f) / 33.0f)   // ≈ 3.06
-#define AFR_OFFSET 0.7f 
+// Added to the AEM formula to match the AEM gauge. Raise it if the dash reads
+// richer (lower) than the AEM gauge, lower it if it reads leaner.
+// Was 0.7; dash read ~0.4 rich vs the AEM gauge, so now 1.1.
+#define AFR_OFFSET 1.1f
 #define AFR_FILTER_ALPHA 0.3f   // smoothing
 //--------------------------------------//
 
@@ -163,6 +183,9 @@ const float oil_fuel_pressure_alpha = 0.18f;
 #define ARC_SCALE (100.0f / MAX_RPM) 
 #define RPM_MIN_PERIOD  3000
 #define RPM_TIMEOUT_MS  500    // If no pulse for this long, RPM = 0
+#define TACH_RELOCK_LOOPS 20    // ~140 ms of rejected samples before re-locking on consistent ones
+
+static float boost_sensor_volts = 0.0f;   // last computed boost sensor volts (for calibration logs)
 
 static portMUX_TYPE tachMux = portMUX_INITIALIZER_UNLOCKED;
 static pcnt_unit_handle_t pcnt_unit;
@@ -270,6 +293,7 @@ typedef struct __attribute__((packed)) {
     int16_t boost;           // psi x10
     uint32_t lap_time_ms;    // current lap in milliseconds
     uint32_t best_lap_ms;    // best lap of the session in ms (0 = none yet)
+    uint8_t  theme;          // gauge face color theme (index into ui_themes)
 } gauge_payload_t;
 
 
@@ -281,8 +305,6 @@ static lv_color_t orange_color;
 static lv_color_t purple_color;
 static lv_color_t pink_color;
 static lv_color_t blue_color;
-static lv_color_t dial_color;
-static lv_color_t dial_dim_color;
 
 static inline int constrain_int(int x, int low, int high) {
     if (x < low) return low;
@@ -298,8 +320,6 @@ static void init_label_styles(void){
     purple_color = lv_palette_main(LV_PALETTE_PURPLE);
     pink_color = lv_palette_main(LV_PALETTE_PINK);
     blue_color = lv_palette_main(LV_PALETTE_CYAN);
-    dial_color = lv_color_hex(UI_COLOR_DIAL);
-    dial_dim_color = lv_color_hex(UI_COLOR_DIAL_DIM);
 }
 
 static void update_label_if_needed(lv_obj_t *label, char *new_value, lv_color_t new_color) { 
@@ -422,15 +442,23 @@ void tach_task(void *arg) {
         float lastValid = (rpmLastRaw > 500.0f) ? rpmLastRaw :
                           (rpmFiltered > 500.0f ? rpmFiltered : 1000.0f);
 
+        // Copy the samples out, then do the math outside the critical section
+        uint64_t periods[PERIOD_AVG_SAMPLES];
         portENTER_CRITICAL(&tachMux);
+        memcpy(periods, periodBuffer, sizeof(periods));
+        portEXIT_CRITICAL(&tachMux);
+
+        float sampleRpm[PERIOD_AVG_SAMPLES];
+        int sampleCount = 0;
 
         for (int i = 0; i < PERIOD_AVG_SAMPLES; i++) {
 
-            if (periodBuffer[i] > 0) {
+            if (periods[i] > 0) {
 
                 float rpm =
                     60000000.0f /
-                    (periodBuffer[i] * PULSES_PER_REV);
+                    (periods[i] * PULSES_PER_REV);
+                sampleRpm[sampleCount++] = rpm;
 
                 float tolerance;
 
@@ -452,7 +480,25 @@ void tach_task(void *arg) {
             }
         }
 
-        portEXIT_CRITICAL(&tachMux);
+        // Lost lock: every sample keeps getting rejected because the engine is
+        // somewhere else than the last good value (e.g. after a reboot while
+        // driving, the starting guess is 1000 rpm). If the samples agree with
+        // each other, they're real, so re-lock on them instead of waiting for
+        // the engine to come back near the old value.
+        if (count == 0 && rejectStreak >= TACH_RELOCK_LOOPS && sampleCount >= 3) {
+            float lo = sampleRpm[0], hi = sampleRpm[0], sum = 0.0f;
+            for (int i = 0; i < sampleCount; i++) {
+                if (sampleRpm[i] < lo) lo = sampleRpm[i];
+                if (sampleRpm[i] > hi) hi = sampleRpm[i];
+                sum += sampleRpm[i];
+            }
+            float mean = sum / sampleCount;
+            if (mean <= MAX_RPM && (hi - lo) < mean * 0.15f) {
+                rpmRaw = sum;                  // averaged by the divide below
+                count = sampleCount;
+                rpmFiltered = mean;            // jump straight there, no slow climb from 0
+            }
+        }
 
         if (count > 0) {
             rpmRaw /= count;
@@ -558,7 +604,113 @@ void tach_set_rpm(int rpm){
 }
 
 
+static void speed_update_cb(void *arg);
+
+//---------------------------- THEME BUTTON ----------------------------//
+// Each press of the button on THEME_BUTTON_GPIO steps to the next face color.
+// The choice is saved to flash and sent to the side gauges in every packet.
+
+static volatile uint8_t g_theme = 0;
+
+static uint8_t load_theme(void)
+{
+    uint8_t t = 0;
+    nvs_handle_t h;
+    if (nvs_open("ui", NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u8(h, "theme", &t);
+        nvs_close(h);
+    }
+    return t < UI_THEME_COUNT ? t : 0;
+}
+
+static void save_theme(uint8_t t)
+{
+    nvs_handle_t h;
+    if (nvs_open("ui", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "theme", t);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static void theme_button_init(void)
+{
+    gpio_config_t io = {
+        .pin_bit_mask = 1ULL << THEME_BUTTON_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,       // idle high, pressed = grounded
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io);
+}
+
+// Called from gauge_timer (every 10 ms, on the LVGL thread, so it can change
+// the screen directly). Debounced: the pin must hold steady for ~30 ms.
+#if THEME_BUTTON_DEBUG
+static void theme_button_show(int level, int presses)
+{
+    char msg[40];
+    snprintf(msg, sizeof(msg), "GPIO32 %s #%d", level ? "HIGH" : "LOW", presses);
+    ui_tach_show_status(msg, 5000);
+}
+#endif
+
+static void theme_button_poll(void)
+{
+    static int stable = 1, last_raw = 1, steady = 0;
+    static bool first = true;
+    static bool save_pending = false;
+    static int64_t changed_ms = 0;
+    int64_t now_ms = esp_timer_get_time() / 1000;
+
+    int raw = gpio_get_level(THEME_BUTTON_GPIO);
+    if (first) {
+        // Whatever the pin reads at startup is "not pressed", so a button
+        // that's held, miswired or shorted can't change the color on every
+        // boot. A press only counts after the pin has been seen high.
+        first = false;
+        stable = last_raw = raw;
+        steady = 3;
+#if THEME_BUTTON_DEBUG
+        theme_button_show(raw, 0);
+#endif
+        return;
+    }
+    if (raw == last_raw) {
+        if (steady < 3) steady++;
+    } else {
+        last_raw = raw;
+        steady = 0;
+    }
+
+    if (steady == 3 && raw != stable) {
+        stable = raw;
+#if THEME_BUTTON_DEBUG
+        static int presses = 0;
+        if (stable == 0) presses++;
+        theme_button_show(stable, presses);
+#endif
+        if (stable == 0) {                      // pressed
+            uint8_t next = (uint8_t)((ui_get_theme() + 1) % UI_THEME_COUNT);
+            ui_set_theme(next);
+            g_theme = next;
+            save_pending = true;
+            changed_ms = now_ms;
+        }
+    }
+
+    // Save once you've stopped clicking for 3 s, to spare the flash while cycling
+    if (save_pending && now_ms - changed_ms > 3000) {
+        save_theme(g_theme);
+        save_pending = false;
+    }
+}
+//-----------------------------------------------------------------------//
+
 void gauge_timer(lv_timer_t * t) {
+
+    theme_button_poll();
 
     static float displayRPM = 0.0f;
     displayRPM += 0.20f * (rpmNow - displayRPM);
@@ -568,7 +720,7 @@ void gauge_timer(lv_timer_t * t) {
     double miles = odometer_get_miles();
     char odo_buf[16];
     snprintf(odo_buf, sizeof(odo_buf), "%06.1f", miles);
-    update_label_if_needed(ui_label_odometer_value, odo_buf, dial_dim_color);
+    update_label_if_needed(ui_label_odometer_value, odo_buf, lv_color_hex(UI_COLOR_DIAL_DIM));
 
 
     // -------- GEAR DETECTION -------- //
@@ -590,14 +742,18 @@ void gauge_timer(lv_timer_t * t) {
     if (gear != last_displayed) {
 
         if(gear == -1) {
-            update_label_if_needed(ui_label_gear_value, "N", dial_color);
+            update_label_if_needed(ui_label_gear_value, "N", lv_color_hex(UI_COLOR_DIAL));
         } else {
             char buf[2];
             snprintf(buf, sizeof(buf), "%d", gear);
-            update_label_if_needed(ui_label_gear_value, buf, dial_color);
+            update_label_if_needed(ui_label_gear_value, buf, lv_color_hex(UI_COLOR_DIAL));
         }
 
         last_displayed = gear;
+    }
+
+    if (SENSOR_SOURCE == SENSOR_SOURCE_ANALOG) {
+        speed_update_cb(ui_label_mph_value);   // GPS speed, safely on the LVGL thread
     }
 
     if (SENSOR_SOURCE == SENSOR_SOURCE_CAN){
@@ -621,7 +777,7 @@ void gauge_timer(lv_timer_t * t) {
         char fuel_comp_buf[12];
         snprintf(fuel_comp_buf, sizeof(fuel_comp_buf), "%4.1f", g_gauge_data.fuel_comp);
         //***Update afr and boost and fuel_comp labels here, 
-        // example -> update_label_if_needed(ui_label_odometer_value, odo_buf, dial_dim_color);
+        // example -> update_label_if_needed(ui_label_odometer_value, odo_buf, lv_color_hex(UI_COLOR_DIAL_DIM));
         // update_label_if_needed();
         // update_label_if_needed();
     
@@ -688,7 +844,7 @@ static void speed_update_cb(void *arg){
     static bool last_fix = true;
     static int last_speed = -1;
 
-    bool has_fix = gps_has_fix();
+    bool has_fix = g_gps_fix;
 
     if (!has_fix) {
         if (last_fix) {
@@ -738,18 +894,15 @@ void gps_task(void *arg) {
         int  sats_used = gps_sats_used();
         float hdop     = gps_hdop();
 
-        static int last_speed = -1;
+        g_gps_fix = has_fix;
 
         if (has_fix) {
             float new_speed = gps_get_speed_mph();
             g_speed_mph = new_speed;
 
-            int speed_int = (int)new_speed;
-
-            if (speed_int != last_speed) {
-                lv_async_call(speed_update_cb, ui_label_mph_value);
-                last_speed = speed_int;
-            }
+            // The speed label is updated by gauge_timer (LVGL thread). Calling
+            // LVGL from this task, even lv_async_call, isn't thread-safe and
+            // can corrupt LVGL's timer list -> random crash/reboot.
             if (sats_used >= 5 && hdop < 3.5f && gps_location_updated()){
                 double current_lat = gps_get_lat();
                 double current_lon = gps_get_lon();
@@ -786,8 +939,7 @@ void gps_task(void *arg) {
 
 
         } else {
-            g_speed_mph = 0;                
-            lv_async_call(speed_update_cb, ui_label_mph_value);
+            g_speed_mph = 0;
         }
         #if ENABLE_LOGS
             ESP_LOGI(TAG_GPS,
@@ -926,9 +1078,8 @@ static void adc_task(void *arg) {
             float voltage_boost = ((float)raw_boost / 4095.0f) * ADC_VREF;
             // Undo any voltage divider if present
             float sensor_voltage = voltage_boost / BOOST_DIVIDER_SCALE;
-            // Prosport sender scales ~1V @ 0 PSI to ~4V @ ~43.5 PSI
-            float pressure_psi = (sensor_voltage - BOOST_ZERO_OFFSET) * 14.5f;
-            pressure_psi += BOOST_OFFSET;
+            boost_sensor_volts = sensor_voltage;
+            float pressure_psi = (sensor_voltage - BOOST_ZERO_VOLTS) * BOOST_PSI_PER_VOLT;
             // Clamp to realistic limits
             if (pressure_psi < -15.0f) pressure_psi = -15.0f;
             if (pressure_psi > 45.0f)  pressure_psi = 45.0f;
@@ -1031,6 +1182,7 @@ static void adc_task(void *arg) {
 
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
             p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
+            p->theme        = g_theme;
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
@@ -1049,10 +1201,11 @@ static void adc_task(void *arg) {
                     g_gauge_data.water_temp_f,
                     g_gauge_data.oil_temp_f);
             ESP_LOGI(TAG_PRESSURE,
-                    "Oil PSI: %.2f  Fuel PSI: %.2f Boost PSI: %.2f ",
+                    "Oil PSI: %.2f  Fuel PSI: %.2f Boost PSI: %.2f (sensor %.3f V)",
                     g_gauge_data.oil_pressure_psi,
                     g_gauge_data.fuel_pressure_psi,
-                    g_gauge_data.boost_psi);
+                    g_gauge_data.boost_psi,
+                    boost_sensor_volts);
             ESP_LOGI(TAG_AFR,
                     "AFR: %.2f",
                     g_gauge_data.afr);
@@ -1153,6 +1306,7 @@ static void can_mapping_task(void *arg){
 
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
             p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
+            p->theme        = g_theme;
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
@@ -1168,7 +1322,48 @@ static void can_mapping_task(void *arg){
 
 //------------------------------------------------------------------------//
 
+// Short, screen-friendly name for a reset reason
+static const char *reset_reason_name(esp_reset_reason_t r)
+{
+    switch (r) {
+        case ESP_RST_POWERON:   return "POWER ON";
+        case ESP_RST_EXT:       return "EXT RESET";
+        case ESP_RST_SW:        return "SW RESET";
+        case ESP_RST_PANIC:     return "CRASH";
+        case ESP_RST_INT_WDT:   return "INT WDT";
+        case ESP_RST_TASK_WDT:  return "TASK WDT";
+        case ESP_RST_WDT:       return "WDT";
+        case ESP_RST_DEEPSLEEP: return "DEEP SLEEP";
+        case ESP_RST_BROWNOUT:  return "BROWNOUT";
+        case ESP_RST_SDIO:      return "SDIO";
+        default:                return "UNKNOWN";
+    }
+}
+
+// Keeps a running count of unexpected restarts (anything but a normal power
+// on) in NVS. Returns the count including this boot. Needs NVS initialized.
+static uint32_t count_unexpected_restart(esp_reset_reason_t r)
+{
+    uint32_t count = 0;
+    nvs_handle_t h;
+    if (nvs_open("diag", NVS_READWRITE, &h) != ESP_OK) return 0;
+    nvs_get_u32(h, "unexp_rst", &count);          // stays 0 if not stored yet
+    if (r != ESP_RST_POWERON) {
+        count++;
+        nvs_set_u32(h, "unexp_rst", count);
+        nvs_commit(h);
+    }
+    nvs_close(h);
+    return count;
+}
+
 void app_main(void) {
+    // Why the board (re)started: POWERON is normal, CRASH = code panic,
+    // TASK/INT WDT = something hung, BROWNOUT = supply voltage dipped.
+    esp_reset_reason_t rr = esp_reset_reason();
+    const char *rr_name = reset_reason_name(rr);
+    ESP_LOGW("BOOT", "Reset reason: %s (%d)", rr_name, (int)rr);
+
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
         .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
@@ -1184,13 +1379,24 @@ void app_main(void) {
     adc_global_init();
     init_label_styles();
     tach_init();
-    odometer_init();
+    theme_button_init();
+    odometer_init();                     // also initializes NVS
+    uint32_t unexpected_restarts = count_unexpected_restart(rr);
+    g_theme = load_theme();
+    ui_set_theme(g_theme);               // before ui_init, so the first build uses it
 
     // LVGL isn't thread-safe: hold the display lock while building the UI so
     // the LVGL port task can't render at the same time.
     bsp_display_lock(0);
     ui_init();
     lv_timer_create(gauge_timer, 10, NULL);
+    // After an unexpected restart, show what it was under the odometer for
+    // 15 s, with how many unexpected restarts there have been in total.
+    if (rr != ESP_RST_POWERON) {
+        char msg[40];
+        snprintf(msg, sizeof(msg), "RESET: %s #%lu", rr_name, (unsigned long)unexpected_restarts);
+        ui_tach_show_status(msg, 15000);
+    }
     bsp_display_unlock();
 
     uart_init(UART_PORT, UART_TX_PIN, UART_PIN_NO_CHANGE, UART_TX_BUF_SIZE, UART_BAUD_RATE); 
@@ -1211,6 +1417,6 @@ void app_main(void) {
 
     bsp_display_backlight_off();
     vTaskDelay(pdMS_TO_TICKS(100)); 
-    bsp_display_brightness_set(70); 
+    bsp_display_brightness_set(50); 
 
 }

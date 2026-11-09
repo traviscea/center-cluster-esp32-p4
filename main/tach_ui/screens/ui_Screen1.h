@@ -6,6 +6,8 @@
 #ifndef UI_SCREEN1_H
 #define UI_SCREEN1_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,12 +20,30 @@ extern "C" {
 #define UI_SHIFT_BLINK_WARN_MS 150  // yellow blink half-period (on/off time)
 #define UI_SHIFT_BLINK_RED_MS   70  // red blink half-period (faster = more urgent)
 
-#define UI_COLOR_DIAL        0xFF3D1F  // backlit red-orange ticks + numerals
-#define UI_COLOR_DIAL_DIM    0xB82A14  // secondary text (units, odometer)
 #define UI_COLOR_NEEDLE      0xFF2A12  // needle
 #define UI_COLOR_SPEED       0xE6F0FF  // speed readout (ice white)
 #define UI_COLOR_SHIFT_WARN  0xFFC400  // shift light, warning (yellow)
 #define UI_COLOR_SHIFT_RED   0xFF1A0A  // shift light, shift now (red)
+
+// ---------------- Face color themes ----------------
+// The face (ticks, numerals, labels, icons) follows the current theme. Needles,
+// readouts, warnings and the red dotted zones keep their own colors.
+// The theme list must be identical on all three screens: the center sends the
+// theme number to the side gauges.
+typedef struct { const char *name; uint32_t dial; uint32_t dim; } ui_theme_t;
+#define UI_THEME_COUNT 6
+extern const ui_theme_t ui_themes[UI_THEME_COUNT];
+
+uint32_t ui_theme_dial(void);              // current face color
+uint32_t ui_theme_dim(void);               // current secondary color (captions)
+uint8_t  ui_get_theme(void);
+// Switch theme. Call from the LVGL thread (or with the LVGL lock held). Cheap
+// to call every frame: it only redraws when the theme actually changes.
+void     ui_set_theme(uint8_t index);
+
+#define UI_COLOR_DIAL      (ui_theme_dial())
+#define UI_COLOR_DIAL_DIM  (ui_theme_dim())
+#define UI_COLOR_REDLINE   0xFF2A0A  // dotted red zones stay red on every theme
 
 // 1 = pre-render the static dial into one image at boot (smoother needle).
 // Set to 0 if the screen stays blank; the dial is then drawn live instead.
@@ -36,6 +56,10 @@ extern void ui_Screen1_screen_destroy(void);
 // Drive the needle (and the shift light). Safe to call every frame:
 // it skips redraws when the value hasn't meaningfully changed.
 extern void ui_tach_set_rpm(int32_t rpm);
+
+// Show a short status line under the odometer, then remove it after
+// duration_ms (used to report an unexpected restart).
+extern void ui_tach_show_status(const char *text, uint32_t duration_ms);
 
 extern lv_obj_t *ui_Screen1;
 extern lv_obj_t *ui_rpm_meter;        // needle layer (lv_meter)
