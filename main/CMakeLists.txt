@@ -68,6 +68,7 @@ idf_component_register(
         "tach_ui/fonts/ui_font_odo_42.c"
         "tach_ui/fonts/ui_font_status_26.c"
         "tach_ui/images/ui_img_sti_logo_png.c"
+        "tach_ui/images/ui_img_sti_badge.c"
         "tach_ui/boot/boot_screen.c"
         "odometer/odometer.c"
         "lap_timer/lap_timer.c"

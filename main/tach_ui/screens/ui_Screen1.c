@@ -14,6 +14,11 @@
 #include "../ui.h"
 #include <math.h>
 
+LV_IMG_DECLARE(ui_img_sti_badge);        // images/ui_img_sti_badge.c
+LV_IMG_DECLARE(ui_img_sti_badge_glow);
+
+static lv_obj_t *badge_obj = NULL, *badge_glow = NULL;
+
 // Base resolution the layout is designed for (800x800 round screen)
 #define UI_BASE_RES 800
 #define UI_SCALE(x) ((x) * LV_HOR_RES / UI_BASE_RES)
@@ -136,6 +141,164 @@ static void shift_light_set_state(int state)
     }
 }
 
+// ---------------------------------------------------------------- face lighting
+// During the startup sweep only the needles are lit; the rest of the face is
+// dark and fades in once the sweep ends, like the stock cluster at key-on.
+
+static lv_opa_t face_opa = LV_OPA_COVER;
+
+static void face_set_opa(lv_opa_t o)
+{
+    face_opa = o;
+    if (!ui_Screen1) return;
+    uint32_t n = lv_obj_get_child_cnt(ui_Screen1);
+    for (uint32_t i = 0; i < n; i++) {
+        lv_obj_t *c = lv_obj_get_child(ui_Screen1, i);
+        if (c == ui_rpm_meter || c == badge_obj || c == badge_glow) continue;               // needles stay lit
+        if (c == ui_rpm_hub) {                          // hub caps aren't lit; their numbers are
+            uint32_t k = lv_obj_get_child_cnt(c);
+            for (uint32_t j = 0; j < k; j++) lv_obj_set_style_opa(lv_obj_get_child(c, j), o, 0);
+            continue;
+        }
+        lv_obj_set_style_opa(c, o, 0);
+    }
+}
+
+static void face_fade_cb(void *var, int32_t v)
+{
+    (void)var;
+    face_set_opa((lv_opa_t)v);
+}
+
+static void face_fade_in(void)
+{
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, ui_Screen1);
+    lv_anim_set_exec_cb(&a, face_fade_cb);
+    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_time(&a, UI_SWEEP_FADE_MS);
+    lv_anim_start(&a);
+}
+
+// ---------------------------------------------------------------- backlight
+// The backlight comes on at a set point in the startup (UI_BACKLIGHT_ON_MS),
+// on the same timeline on all three screens, so they light up together.
+
+static void (*backlight_cb)(void) = NULL;
+static bool backlight_done = false;
+
+void ui_set_backlight_cb(void (*cb)(void)) { backlight_cb = cb; }
+
+static void backlight_on(void)
+{
+    if (backlight_done) return;
+    backlight_done = true;
+    if (backlight_cb) backlight_cb();
+}
+
+// ---------------------------------------------------------------- startup sweep
+// At boot the needle sweeps to full scale and back down to the live RPM, like
+// the stock cluster at key-on. While it runs, ui_tach_set_rpm() only records
+// the value, so the sweep lands on the real RPM when it finishes.
+
+static lv_timer_t *sweep_timer = NULL;
+static uint32_t sweep_start = 0;
+static int32_t sweep_live_rpm = 0;
+
+static float sweep_ease(float x)              // smooth start and stop
+{
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    return x * x * (3 - 2 * x);
+}
+
+// Needle position at time t (ms into the sweep) on a 0..full scale, ending at
+// 'rest'. Returns false once the sweep is over.
+static bool sweep_pos(uint32_t t, float full, float rest, float *out)
+{
+    const uint32_t up = UI_SWEEP_UP_MS, hold = UI_SWEEP_HOLD_MS, down = UI_SWEEP_DOWN_MS;
+    if (t < up) { *out = full * sweep_ease((float)t / up); return true; }
+    if (t < up + hold) { *out = full; return true; }
+    if (t < up + hold + down) {
+        *out = full + (rest - full) * sweep_ease((float)(t - up - hold) / down);
+        return true;
+    }
+    return false;
+}
+
+// Badge intro: fade up with a bright glow, then the glow eases down to rest
+static void logo_step(uint32_t el)
+{
+    static lv_opa_t shown_badge = 1, shown_glow = 1;    // forces the first update
+    lv_opa_t b = LV_OPA_COVER, g = UI_LOGO_GLOW_REST;
+    if (el >= UI_BACKLIGHT_ON_MS) backlight_on();
+    if (el < UI_LOGO_DELAY_MS) {
+        b = g = LV_OPA_TRANSP;
+    } else if (el < UI_LOGO_DELAY_MS + UI_LOGO_FADE_MS) {
+        b = g = (lv_opa_t)(255 * sweep_ease((float)(el - UI_LOGO_DELAY_MS) / UI_LOGO_FADE_MS));
+    } else if (el < UI_LOGO_DELAY_MS + UI_LOGO_FADE_MS + UI_LOGO_SETTLE_MS) {
+        float k = sweep_ease((float)(el - UI_LOGO_DELAY_MS - UI_LOGO_FADE_MS) / UI_LOGO_SETTLE_MS);
+        g = (lv_opa_t)(255 + (UI_LOGO_GLOW_REST - 255) * k);
+    }
+    if (b != shown_badge) { lv_obj_set_style_opa(badge_obj, b, 0); shown_badge = b; }
+    if (g != shown_glow) { lv_obj_set_style_opa(badge_glow, g, 0); shown_glow = g; }
+}
+
+uint16_t ui_startup_ms(void)
+{
+#if UI_SWEEP_ENABLE
+    uint32_t el = lv_tick_elaps(sweep_start);
+    return el > 0xFFFF ? 0xFFFF : (uint16_t)el;
+#else
+    return 0xFFFF;                            // no startup sequence
+#endif
+}
+
+static void sweep_cb(lv_timer_t *t)
+{
+    (void)t;
+    uint32_t el = lv_tick_elaps(sweep_start);
+    logo_step(el);
+    if (el < UI_SWEEP_DELAY_MS) return;
+    el -= UI_SWEEP_DELAY_MS;
+
+    if (lv_obj_has_flag(ui_rpm_meter, LV_OBJ_FLAG_HIDDEN)) {   // needle and hub appear
+        lv_obj_clear_flag(ui_rpm_meter, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(ui_rpm_hub, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    float rpm;
+    if (sweep_pos(el, UI_TACH_MAX_RPM, (float)sweep_live_rpm, &rpm)) {
+        lv_meter_set_indicator_value(ui_rpm_meter, needle_glow, (int32_t)rpm);
+        lv_meter_set_indicator_value(ui_rpm_meter, needle, (int32_t)rpm);
+        return;
+    }
+
+    // Done: hand the needle and shift light back to live RPM
+    lv_timer_del(sweep_timer);
+    sweep_timer = NULL;
+    shift_light_state = 0;
+    shift_light_paint(false);
+    last_rpm = -1000;
+    ui_tach_set_rpm(sweep_live_rpm);
+    logo_step(UINT32_MAX / 2);                // badge and glow at rest
+    backlight_on();                           // (already on; just in case)
+    face_fade_in();
+}
+
+static lv_obj_t *make_badge(const lv_img_dsc_t *src)
+{
+    lv_obj_t *b = lv_img_create(ui_Screen1);
+    lv_img_set_src(b, src);
+    lv_obj_set_style_img_recolor(b, lv_color_hex(UI_COLOR_STI_BADGE), 0);
+    lv_obj_set_style_img_recolor_opa(b, LV_OPA_COVER, 0);
+    lv_img_set_zoom(b, (uint16_t)(256 * LV_HOR_RES / UI_BASE_RES));
+    lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(b, LV_ALIGN_CENTER, 0, UI_SCALE(-214));
+    return b;
+}
+
 static lv_obj_t *make_circle(lv_obj_t *parent, lv_coord_t d)
 {
     lv_obj_t *o = lv_obj_create(parent);
@@ -209,8 +372,6 @@ static lv_obj_t *build_static_dial(lv_obj_t *parent)
     // Redline: stippled dot band along the outer edge (under the ticks)
     lv_obj_add_event_cb(m, redline_stipple_cb, LV_EVENT_DRAW_MAIN_BEGIN, NULL);
 
-    // Units, tucked under the 4 and 5 like the OEM dial
-    make_label(root, &ui_font_dial_30, UI_COLOR_DIAL, "x1000r/min", 0, UI_SCALE(-214));
 
     return root;
 }
@@ -270,6 +431,7 @@ static void install_static_dial(void)
     if (dial_obj) lv_obj_del(dial_obj);       // old live face (snapshot off/failed)
     dial_obj = dial;
     lv_obj_move_background(dial_obj);
+    if (face_opa != LV_OPA_COVER) lv_obj_set_style_opa(dial_obj, face_opa, 0);   // theme change mid-sweep
 }
 
 void ui_set_theme(uint8_t index)
@@ -291,6 +453,13 @@ void ui_Screen1_screen_init(void)
     // ---- Static dial -> one image ----
     dial_obj = NULL;
     install_static_dial();
+
+    // STI badge where the OEM dial has its units, under the 4 and 5, with a soft
+    // glow under it. Alpha masks, so recolor sets the color: pink on every theme.
+    // Kept out of the dial image so it can light up first at startup.
+    badge_glow = make_badge(&ui_img_sti_badge_glow);
+    badge_obj = make_badge(&ui_img_sti_badge);
+    lv_obj_set_style_opa(badge_glow, UI_LOGO_GLOW_REST, 0);
 
     // ---- Shift light: stock STI position, just above the hub (under the needle) ----
     ui_shift_light = make_circle(ui_Screen1, UI_SCALE(38));
@@ -334,6 +503,21 @@ void ui_Screen1_screen_init(void)
     ui_label_odometer_value = make_label(ui_Screen1, &ui_font_odo_42, UI_COLOR_DIAL_DIM, "000000.0", 0, UI_SCALE(330));
 
     last_rpm = -1000;
+
+    backlight_done = false;
+#if !UI_SWEEP_ENABLE
+    backlight_on();                           // no startup sequence: light up now
+#endif
+#if UI_SWEEP_ENABLE
+    sweep_live_rpm = 0;
+    sweep_start = lv_tick_get();
+    sweep_timer = lv_timer_create(sweep_cb, 10, NULL);
+    face_set_opa(LV_OPA_TRANSP);              // blank face
+    lv_obj_add_flag(ui_rpm_meter, LV_OBJ_FLAG_HIDDEN);   // needle and hub come in after the badge
+    lv_obj_add_flag(ui_rpm_hub, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_opa(badge_obj, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_opa(badge_glow, LV_OPA_TRANSP, 0);
+#endif
 }
 
 void ui_tach_set_rpm(int32_t rpm)
@@ -341,6 +525,7 @@ void ui_tach_set_rpm(int32_t rpm)
     if (!ui_rpm_meter) return;
     if (rpm < 0) rpm = 0;
     if (rpm > UI_TACH_MAX_RPM) rpm = UI_TACH_MAX_RPM;
+    if (sweep_timer) { sweep_live_rpm = rpm; return; }   // startup sweep owns the needle
 
     // ~0.5 degree of needle travel; avoids redraws for sensor noise
     if (LV_ABS(rpm - last_rpm) >= 15) {
@@ -348,6 +533,11 @@ void ui_tach_set_rpm(int32_t rpm)
         lv_meter_set_indicator_value(ui_rpm_meter, needle, rpm);
         last_rpm = rpm;
     }
+}
+
+void ui_tach_set_shift_rpm(int32_t rpm)
+{
+    if (!ui_shift_light || sweep_timer) return;   // stays dark during the startup sweep
 
     // Shift light, with 100 rpm hysteresis on the way down so it doesn't
     // chatter between states when RPM hovers right at a threshold
@@ -372,6 +562,7 @@ void ui_tach_show_status(const char *text, uint32_t duration_ms)
     if (!ui_Screen1) return;
     if (!status_label) {
         status_label = lv_label_create(ui_Screen1);
+        lv_obj_set_style_opa(status_label, face_opa, 0);   // lights up with the face
         lv_obj_set_style_text_font(status_label, &ui_font_status_26, 0);
         lv_obj_set_style_text_color(status_label, lv_color_hex(UI_COLOR_SHIFT_WARN), 0);
         lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -391,7 +582,10 @@ void ui_Screen1_screen_destroy(void)
     status_label = NULL;
     if (shift_blink_timer) lv_timer_del(shift_blink_timer);
     shift_blink_timer = NULL;
+    if (sweep_timer) lv_timer_del(sweep_timer);
+    sweep_timer = NULL;
     shift_light_state = 0;
+    badge_obj = badge_glow = NULL;
     if (ui_Screen1) lv_obj_del(ui_Screen1);
 #if LV_USE_SNAPSHOT
     if (dial_snapshot) lv_snapshot_free(dial_snapshot);

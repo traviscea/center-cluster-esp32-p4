@@ -68,7 +68,7 @@
 
 #define TACH_GPIO GPIO_NUM_5
 
-// Theme button - GPIO 32, wired to ground through a push button
+// Theme button - GPIO 4, wired to ground through a push button
 #define THEME_BUTTON_GPIO GPIO_NUM_32
 // 1 = show what the button pin reads under the odometer whenever it changes
 // (for checking the wiring without a computer). Set to 0 once it works.
@@ -86,7 +86,7 @@
 #define UART_PORT UART_NUM_1
 #define UART1_PORT UART_NUM_2
 #define GAUGE_PKT_SOF   0xA5
-#define GAUGE_PKT_LEN   27   // SOF + seq + 23-byte payload + CRC16
+#define GAUGE_PKT_LEN   29   // SOF + seq + 25-byte payload + CRC16
 #define UART_TX_BUF_SIZE 256
 #define UART_BAUD_RATE 2000000
 
@@ -294,7 +294,13 @@ typedef struct __attribute__((packed)) {
     uint32_t lap_time_ms;    // current lap in milliseconds
     uint32_t best_lap_ms;    // best lap of the session in ms (0 = none yet)
     uint8_t  theme;          // gauge face color theme (index into ui_themes)
+    uint16_t startup_ms;     // ms since this screen's startup began (stops at 65535),
+                             // so the side gauges can run their startup in step
 } gauge_payload_t;
+
+// The packet length must match the payload exactly, or the last payload bytes
+// overlap the CRC. This stops the build if they ever disagree.
+_Static_assert(sizeof(gauge_payload_t) == GAUGE_PKT_LEN - 4, "GAUGE_PKT_LEN must be payload + 4");
 
 
 //---------------------------------------//
@@ -599,7 +605,7 @@ static int detect_gear(float rpm, float mph, float dt)
 }
 
 void tach_set_rpm(int rpm){
-    // Needle position + shift glow are handled by the dial UI
+    // Needle position; the shift light is driven separately (gauge_timer)
     ui_tach_set_rpm(rpm);
 }
 
@@ -651,7 +657,7 @@ static void theme_button_init(void)
 static void theme_button_show(int level, int presses)
 {
     char msg[40];
-    snprintf(msg, sizeof(msg), "GPIO32 %s #%d", level ? "HIGH" : "LOW", presses);
+    snprintf(msg, sizeof(msg), "GPIO%d %s #%d", (int)THEME_BUTTON_GPIO, level ? "HIGH" : "LOW", presses);
     ui_tach_show_status(msg, 5000);
 }
 #endif
@@ -716,6 +722,9 @@ void gauge_timer(lv_timer_t * t) {
     displayRPM += 0.20f * (rpmNow - displayRPM);
 
     tach_set_rpm(displayRPM);
+    // Shift light uses the tach task's RPM directly, skipping the needle's extra
+    // smoothing, so it comes on closer to the real shift point on hard pulls
+    ui_tach_set_shift_rpm((int32_t)rpmNow);
 
     double miles = odometer_get_miles();
     char odo_buf[16];
@@ -1183,6 +1192,7 @@ static void adc_task(void *arg) {
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
             p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
             p->theme        = g_theme;
+            p->startup_ms   = ui_startup_ms();
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
@@ -1307,6 +1317,7 @@ static void can_mapping_task(void *arg){
             p->lap_time_ms  = (uint32_t)(lap_us / 1000);
             p->best_lap_ms  = (uint32_t)(lap_timer_get_best_us() / 1000);
             p->theme        = g_theme;
+            p->startup_ms   = ui_startup_ms();
 
             uint16_t crc = crc16_ccitt(&buf[1], GAUGE_PKT_LEN - 3);
             memcpy(&buf[GAUGE_PKT_LEN - 2], &crc, 2);
@@ -1357,7 +1368,19 @@ static uint32_t count_unexpected_restart(esp_reset_reason_t r)
     return count;
 }
 
+// Called by the startup sequence when it's time to light the screen
+static void center_backlight_on(void)
+{
+    bsp_display_brightness_set(50);
+}
+
 void app_main(void) {
+    // Keep the backlight off from the start (it's active-low, so high = off).
+    // The bootloader hook already does this; this covers a build without it.
+    // The display driver takes the pin over later, still off.
+    gpio_set_level(BSP_LCD_BACKLIGHT, 1);
+    gpio_set_direction(BSP_LCD_BACKLIGHT, GPIO_MODE_OUTPUT);
+
     // Why the board (re)started: POWERON is normal, CRASH = code panic,
     // TASK/INT WDT = something hung, BROWNOUT = supply voltage dipped.
     esp_reset_reason_t rr = esp_reset_reason();
@@ -1375,6 +1398,7 @@ void app_main(void) {
         }
     };
     lv_display_t *disp = bsp_display_start_with_config(&cfg);
+    bsp_display_backlight_off();         // stays dark until the startup turns it on
 
     adc_global_init();
     init_label_styles();
@@ -1384,6 +1408,7 @@ void app_main(void) {
     uint32_t unexpected_restarts = count_unexpected_restart(rr);
     g_theme = load_theme();
     ui_set_theme(g_theme);               // before ui_init, so the first build uses it
+    ui_set_backlight_cb(center_backlight_on);
 
     // LVGL isn't thread-safe: hold the display lock while building the UI so
     // the LVGL port task can't render at the same time.
@@ -1415,8 +1440,7 @@ void app_main(void) {
 
     xTaskCreatePinnedToCore(save_miles_task, "save_miles_task", 4096, NULL, 4, NULL, 0);
 
-    bsp_display_backlight_off();
-    vTaskDelay(pdMS_TO_TICKS(100)); 
-    bsp_display_brightness_set(50); 
+    // The backlight is turned on by the startup sequence (center_backlight_on),
+    // at the same moment as the side gauges'
 
 }

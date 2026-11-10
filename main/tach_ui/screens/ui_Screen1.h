@@ -24,6 +24,23 @@ extern "C" {
 #define UI_COLOR_SPEED       0xE6F0FF  // speed readout (ice white)
 #define UI_COLOR_SHIFT_WARN  0xFFC400  // shift light, warning (yellow)
 #define UI_COLOR_SHIFT_RED   0xFF1A0A  // shift light, shift now (red)
+#define UI_COLOR_STI_BADGE   0xFF4FA8  // STI badge under the 4 and 5 (pink on every theme)
+
+// ---------------- Startup (like the stock cluster at key-on) ----------------
+// Screen dark; the STI badge fades in and glows, then the needle appears and
+// sweeps to full scale and back to the live RPM, then the rest of the face
+// fades in. Times are from when the screen is built.
+#define UI_SWEEP_ENABLE      1     // 0 = no sweep
+#define UI_LOGO_DELAY_MS     300   // badge starts to light
+#define UI_BACKLIGHT_ON_MS   UI_LOGO_DELAY_MS   // backlight on, together with the side gauges
+#define UI_LOGO_FADE_MS      600   // badge and glow fade up
+#define UI_LOGO_SETTLE_MS    800   // then the glow eases down to...
+#define UI_LOGO_GLOW_REST    90    // ...this (0-255) and stays
+#define UI_SWEEP_DELAY_MS    1200  // needle appears and starts sweeping (same on the side gauges)
+#define UI_SWEEP_UP_MS       800   // rest -> full scale
+#define UI_SWEEP_HOLD_MS     250   // pause at full scale
+#define UI_SWEEP_DOWN_MS     900   // full scale -> live value
+#define UI_SWEEP_FADE_MS     400   // then the face fades in over this long
 
 // ---------------- Face color themes ----------------
 // The face (ticks, numerals, labels, icons) follows the current theme. Needles,
@@ -53,9 +70,21 @@ void     ui_set_theme(uint8_t index);
 extern void ui_Screen1_screen_init(void);
 extern void ui_Screen1_screen_destroy(void);
 
-// Drive the needle (and the shift light). Safe to call every frame:
-// it skips redraws when the value hasn't meaningfully changed.
+// Drive the needle. Safe to call every frame: it skips redraws when the value
+// hasn't meaningfully changed.
 extern void ui_tach_set_rpm(int32_t rpm);
+
+// Drive the shift light. Separate from the needle so it can use a faster,
+// less-smoothed RPM. Safe to call every frame.
+extern void ui_tach_set_shift_rpm(int32_t rpm);
+
+// Called once when it's time to turn the backlight on (a set point in the
+// startup, the same on all three screens). Register before ui_init().
+void ui_set_backlight_cb(void (*cb)(void));
+
+// How far into its startup this screen is, in ms (stops at 65535). Sent to the
+// side gauges so their startup runs in step with this one. Safe from any task.
+uint16_t ui_startup_ms(void);
 
 // Show a short status line under the odometer, then remove it after
 // duration_ms (used to report an unexpected restart).
