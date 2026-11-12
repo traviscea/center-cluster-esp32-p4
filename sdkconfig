@@ -750,6 +750,14 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# LVGL 9 compatibility (leave all off)
+#
+# CONFIG_LV_USE_LIBPNG is not set
+# CONFIG_LV_USE_LIBJPEG_TURBO is not set
+# CONFIG_LV_USE_LZ4 is not set
+# end of LVGL 9 compatibility (leave all off)
+
+#
 # Compiler options
 #
 # CONFIG_COMPILER_OPTIMIZATION_DEBUG is not set
