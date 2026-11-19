@@ -9,6 +9,7 @@
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
 #include "bsp_board_extra.h"
+#include "sound/sound.h"
 #include "lvgl.h"
 #include "lv_demos.h"
 #include "ui.h"
@@ -88,7 +89,10 @@
 #define GAUGE_PKT_SOF   0xA5
 #define GAUGE_PKT_LEN   29   // SOF + seq + 25-byte payload + CRC16
 #define UART_TX_BUF_SIZE 256
-#define UART_BAUD_RATE 2000000
+// Data link to the side gauges. 115200 is plenty (packets use ~1.5 KB/s) and a
+// slower line turns electrical noise into far fewer garbage bytes than 2 Mbaud.
+// Must match UART_BAUD on both side gauges.
+#define UART_BAUD_RATE 115200
 
 #define ENABLE_LOGS false
 #define ADC_UPDATE_PERIOD_MS 10
@@ -662,6 +666,71 @@ static void theme_button_show(int level, int presses)
 }
 #endif
 
+// ---------------------------------------------------------------- warnings
+// Oil pressure, oil temp and coolant warnings: repeating triple beep on the
+// speaker plus the warning under the odometer, until it clears. A press of the
+// theme button while a warning is sounding silences it for ALERT_MUTE_MS
+// (and doesn't change the color).
+#define ALERT_RUNNING_RPM      400      // engine counts as running above this...
+#define ALERT_RUNNING_MS       5000     // ...and oil pressure is judged after this long running
+#define ALERT_OILP_IDLE_PSI    10.0f    // low oil pressure: below this at idle (<= 1500 rpm)...
+#define ALERT_OILP_HIGH_PSI    45.0f    // ...rising to this at 3000 rpm and up
+#define ALERT_OILP_HOLD_MS     1000     // must last this long (ignores a brief dip)
+#define ALERT_COOLANT_F        230.0f   // coolant too hot at/above this...
+#define ALERT_OILT_F           250.0f   // oil too hot at/above this...
+#define ALERT_TEMP_HYST_F      5.0f     // ...clears this far below
+#define ALERT_TEMP_HOLD_MS     3000     // must last this long
+#define ALERT_MUTE_MS          60000    // button press silences the beeps this long
+
+static bool alert_beeping = false;
+static int64_t alert_mute_until = 0;
+
+static bool alert_check(bool bad, bool *state, int64_t *since, int64_t now, int hold_ms)
+{
+    if (!bad) { *since = 0; *state = false; return false; }
+    if (*since == 0) *since = now;
+    if (now - *since >= hold_ms) *state = true;
+    return *state;
+}
+
+static void alerts_update(void)
+{
+    int64_t now = esp_timer_get_time() / 1000;
+    static int64_t running_since = 0, oilp_since = 0, cool_since = 0, oilt_since = 0;
+    static bool oilp_on = false, cool_on = false, oilt_on = false;
+    static int64_t last_msg = 0;
+
+    float rpm = rpmNow;
+    if (rpm >= ALERT_RUNNING_RPM) { if (running_since == 0) running_since = now; }
+    else running_since = 0;
+    bool running = running_since != 0 && now - running_since >= ALERT_RUNNING_MS;
+
+    // Required oil pressure rises with rpm: idle value up to 1500, high value from 3000
+    float k = (rpm - 1500.0f) / 1500.0f;
+    if (k < 0) k = 0;
+    if (k > 1) k = 1;
+    float need = ALERT_OILP_IDLE_PSI + (ALERT_OILP_HIGH_PSI - ALERT_OILP_IDLE_PSI) * k;
+    alert_check(running && g_gauge_data.oil_pressure_psi < need, &oilp_on, &oilp_since, now, ALERT_OILP_HOLD_MS);
+
+    float cool = g_gauge_data.water_temp_f, oilt = g_gauge_data.oil_temp_f;
+    alert_check(cool >= ALERT_COOLANT_F || (cool_on && cool > ALERT_COOLANT_F - ALERT_TEMP_HYST_F),
+                &cool_on, &cool_since, now, ALERT_TEMP_HOLD_MS);
+    alert_check(oilt >= ALERT_OILT_F || (oilt_on && oilt > ALERT_OILT_F - ALERT_TEMP_HYST_F),
+                &oilt_on, &oilt_since, now, ALERT_TEMP_HOLD_MS);
+
+    bool any = oilp_on || cool_on || oilt_on;
+    alert_beeping = any && now >= alert_mute_until;
+    sound_set_alert(alert_beeping);
+
+    // Name the warning under the odometer (refreshed while it lasts)
+    if (any && now - last_msg >= 1000) {
+        last_msg = now;
+        const char *msg = oilp_on ? "OIL PRESSURE LOW" : cool_on ? "COOLANT HOT" : "OIL TEMP HOT";
+        ui_tach_show_status(msg, 1500);
+    }
+    if (!any) last_msg = 0;
+}
+
 static void theme_button_poll(void)
 {
     static int stable = 1, last_raw = 1, steady = 0;
@@ -697,7 +766,11 @@ static void theme_button_poll(void)
         if (stable == 0) presses++;
         theme_button_show(stable, presses);
 #endif
-        if (stable == 0) {                      // pressed
+        if (stable == 0 && alert_beeping) {     // pressed during a warning: silence it
+            alert_mute_until = now_ms + ALERT_MUTE_MS;
+            alert_beeping = false;
+            sound_set_alert(false);
+        } else if (stable == 0) {               // pressed
             uint8_t next = (uint8_t)((ui_get_theme() + 1) % UI_THEME_COUNT);
             ui_set_theme(next);
             g_theme = next;
@@ -725,6 +798,13 @@ void gauge_timer(lv_timer_t * t) {
     // Shift light uses the tach task's RPM directly, skipping the needle's extra
     // smoothing, so it comes on closer to the real shift point on hard pulls
     ui_tach_set_shift_rpm((int32_t)rpmNow);
+
+    // Shift buzzer: on at the red shift point, off 100 rpm below it (same as the light)
+    static bool shift_buzz = false;
+    if (rpmNow >= UI_TACH_SHIFT_RPM) shift_buzz = true;
+    else if (rpmNow < UI_TACH_SHIFT_RPM - 100) shift_buzz = false;
+    sound_set_shift(shift_buzz);
+    alerts_update();
 
     double miles = odometer_get_miles();
     char odo_buf[16];
@@ -1414,6 +1494,7 @@ void app_main(void) {
     // the LVGL port task can't render at the same time.
     bsp_display_lock(0);
     ui_init();
+    sound_init();                        // startup sound follows the screen's startup from here
     lv_timer_create(gauge_timer, 10, NULL);
     // After an unexpected restart, show what it was under the odometer for
     // 15 s, with how many unexpected restarts there have been in total.

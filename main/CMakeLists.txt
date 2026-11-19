@@ -59,6 +59,8 @@ file(APPEND ${PROTOCOL_LIST_FILE}
 idf_component_register(
     SRCS 
         "main.c"
+        "sound/sound.c"
+        "sound/startup_sound_pcm.c"
         "tach_ui/ui.c"
         "tach_ui/screens/ui_Screen1.c"
         "tach_ui/fonts/ui_font_dial_74.c"
